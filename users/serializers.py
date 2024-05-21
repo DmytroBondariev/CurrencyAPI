@@ -17,18 +17,13 @@ class UserSerializer(serializers.ModelSerializer):
             }
         }
 
-    # def create(self, validated_data):
-    #     subscriptions = validated_data.pop('subscriptions', [])
-    #     user = get_user_model().objects.create_user(**validated_data)
-    #     for currency in subscriptions:
-    #         user.subscriptions.add(currency)
-    #
-    #     return user
-    #
-    # def update(self, instance, validated_data):
-    #     user = super().update(instance, validated_data)
-    #
-    #     return user
+    def create(self, validated_data):
+        subscriptions = validated_data.pop('subscriptions', [])
+        user = get_user_model().objects.create_user(**validated_data)
+        for currency in subscriptions:
+            user.subscriptions.add(currency)
+
+        return user
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
