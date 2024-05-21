@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+
+  redis:
+    image: "redis:alpine"
+
+  celery:
+    build: .
+    command: celery -A CurrencyAPI worker --loglevel=info
+    volumes:
+      - .:/app
+    depends_on:
+      web:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+
+  db:
+    image: postgres:14.1-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_DB_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_DB_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${POSTGRES_DB_NAME} -U ${POSTGRES_DB_USER} -h localhost -p 5432"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    volumes:
+      - db:/var/lib/postgresql/data
+    env_file:
+      - .env
+
+  web:
+    build: .
+    command: >
+      sh -c "python3 manage.py makemigrations &&
+      python3 manage.py migrate &&
+      python3 manage.py init_currencies &&
+      gunicorn CurrencyAPI.wsgi:application --bind 0.0.0.0:8000"
+
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_started
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+
+  celery_beat:
+    build: .
+    command: celery -A CurrencyAPI beat --loglevel=info
+    volumes:
+      - .:/app
+    depends_on:
+      web:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+
+volumes:
+  db:
+    driver: local
