@@ -4,19 +4,11 @@ services:
 
   redis:
     image: "redis:alpine"
-
-  celery:
-    build: .
-    command: celery -A CurrencyAPI worker --loglevel=info
-    volumes:
-      - .:/app
-    depends_on:
-      web:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    env_file:
-      - .env
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   db:
     image: postgres:14.1-alpine
@@ -43,20 +35,27 @@ services:
       python3 manage.py init_currencies &&
       gunicorn CurrencyAPI.wsgi:application --bind 0.0.0.0:8000"
 
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/" ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
     volumes:
       - .:/app
     ports:
       - "8000:8000"
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       db:
+        condition: service_healthy
+    env_file:
+      - .env
+
+  celery:
+    build: .
+    command: celery -A CurrencyAPI worker --loglevel=info
+    volumes:
+      - .:/app
+    depends_on:
+      web:
+        condition: service_started
+      redis:
         condition: service_healthy
     env_file:
       - .env
@@ -68,8 +67,10 @@ services:
       - .:/app
     depends_on:
       web:
-        condition: service_healthy
+        condition: service_started
       redis:
+        condition: service_healthy
+      celery:
         condition: service_started
     env_file:
       - .env
